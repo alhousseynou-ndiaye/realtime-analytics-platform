@@ -25,7 +25,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json() as Promise<Hour
 
 function fmtHour(ts: string) {
   const d = new Date(ts);
-  // affichage "20" pour 20h (simple et lisible)
+  // affichage "20" pour 20h 
   return d.toLocaleString("fr-FR", { hour: "2-digit" });
 }
 
