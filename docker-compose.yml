@@ -1,0 +1,69 @@
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: analytics
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d
+
+  api:
+    build: ./services/api
+    container_name: api
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/analytics
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+
+  producer:
+    build: ./services/producer
+    container_name: producer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      TOPIC: sales_events
+    depends_on:
+      - redpanda
+
+  consumer:
+    build: ./services/consumer
+    container_name: consumer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      TOPIC: sales_events
+      DATABASE_URL: postgresql://app:app@postgres:5432/analytics
+    depends_on:
+      - redpanda
+      - postgres
+
+volumes:
+  pgdata:
