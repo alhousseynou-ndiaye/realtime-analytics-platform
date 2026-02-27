@@ -4,8 +4,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from .db import get_db
 from .schemas import KPIs, ShopHourly
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Real-Time Analytics API", version="0.1.0")
+
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=["*"],  
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
+)
 
 @app.get("/health")
 def health():

@@ -6,7 +6,25 @@ End-to-end data engineering mini-platform:
 - FastAPI exposes analytics endpoints
 
 ## Architecture
-Producer -> Redpanda(topic) -> Consumer -> Postgres (events_raw + agg_sales_hourly) -> FastAPI
+
+- Producer → Kafka (Redpanda)
+- Consumer → PostgreSQL (raw + aggregates)
+- FastAPI → Analytics API
+- (Next.js → Dashboard à venir)
+
+## Tech Stack
+
+- Kafka / Redpanda
+- PostgreSQL
+- FastAPI
+- Docker / Docker Compose
+
+## Use Case
+
+Simulates a real-time retail analytics system:
+- Track sales in real-time
+- Compute KPIs (revenue, orders)
+- Aggregate hourly performance per shop
 
 ## Run
 ```bash
