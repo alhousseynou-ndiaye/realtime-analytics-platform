@@ -10,8 +10,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend,
 } from "recharts";
+import ShopFilter from "./ShopFilter";
 
 type HourlyRow = {
   bucket_start: string;
@@ -25,8 +25,30 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json() as Promise<Hour
 
 function fmtHour(ts: string) {
   const d = new Date(ts);
-  // affichage "20" pour 20h 
   return d.toLocaleString("fr-FR", { hour: "2-digit" });
+}
+
+function sumAllShops(rows: HourlyRow[]) {
+  // { bucket_start: "...", revenue: 1234 }
+  const byBucket = new Map<string, { bucket_start: string; revenue: number }>();
+
+  for (const r of rows) {
+    const key = r.bucket_start;
+    const prev = byBucket.get(key) || { bucket_start: key, revenue: 0 };
+    prev.revenue += r.revenue ?? 0;
+    byBucket.set(key, prev);
+  }
+
+  return Array.from(byBucket.values()).sort(
+    (a, b) => +new Date(a.bucket_start) - +new Date(b.bucket_start)
+  );
+}
+
+function seriesForOneShop(rows: HourlyRow[], shopId: string) {
+  return rows
+    .filter((r) => r.shop_id === shopId)
+    .map((r) => ({ bucket_start: r.bucket_start, revenue: r.revenue ?? 0 }))
+    .sort((a, b) => +new Date(a.bucket_start) - +new Date(b.bucket_start));
 }
 
 export default function HourlyChart() {
@@ -40,6 +62,19 @@ export default function HourlyChart() {
 
   const rows = data ?? [];
 
+  // Shops dynamiques depuis les données
+  const shops: string[] = Array.from(new Set(rows.map((r) => r.shop_id))).sort();
+
+  // Etat filtre
+  const [selectedShop, setSelectedShop] = React.useState<string>("all");
+
+  // Si le shop sélectionné n'existe plus (ex: refresh), reset
+  React.useEffect(() => {
+    if (selectedShop !== "all" && shops.length > 0 && !shops.includes(selectedShop)) {
+      setSelectedShop("all");
+    }
+  }, [shops, selectedShop]);
+
   const box: React.CSSProperties = {
     background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.08)",
@@ -50,33 +85,22 @@ export default function HourlyChart() {
   if (error) return <div style={box}>API error loading hourly.</div>;
   if (isLoading) return <div style={box}>Loading chart…</div>;
 
-  // 1) Shops présents (dynamiques)
-  const shops: string[] = Array.from(new Set(rows.map((r) => r.shop_id))).sort();
-
-  // 2) On transforme: (bucket_start, shop_id, revenue) -> 1 objet par bucket_start
-  //   { bucket_start: "...", shop_001: 1200, shop_002: 800, ... }
-  const byBucket: Record<string, { bucket_start: string; [shopId: string]: number | string }> = {};
-
-  for (const r of rows) {
-    const key = r.bucket_start;
-    if (!byBucket[key]) {
-      byBucket[key] = { bucket_start: key };
-    }
-    byBucket[key][r.shop_id] = r.revenue ?? 0;
-  }
-
-  // 3) Série triée
-  const series = Object.values(byBucket).sort(
-    (a, b) => +new Date(String(a.bucket_start)) - +new Date(String(b.bucket_start))
-  );
+  const series =
+    selectedShop === "all" ? sumAllShops(rows) : seriesForOneShop(rows, selectedShop);
 
   return (
     <div style={box}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>Revenue by hour per shop (24h)</h2>
-        <div style={{ opacity: 0.7, fontSize: 13 }}>
-          {series.length} points • {shops.length} shops
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18 }}>
+            Revenue by hour (24h) {selectedShop === "all" ? "— All shops" : `— ${selectedShop}`}
+          </h2>
+          <div style={{ opacity: 0.7, fontSize: 13, marginTop: 6 }}>
+            Points: {series.length} • Shops detected: {shops.length}
+          </div>
         </div>
+
+        <ShopFilter shops={shops} value={selectedShop} onChange={setSelectedShop} />
       </div>
 
       <div style={{ height: 320, marginTop: 12 }}>
@@ -87,20 +111,9 @@ export default function HourlyChart() {
             <YAxis />
             <Tooltip
               labelFormatter={(l) => new Date(String(l)).toLocaleString("fr-FR")}
-              formatter={(v: any, name: any) => [Number(v ?? 0).toFixed(2), String(name)]}
+              formatter={(v: any) => [Number(v ?? 0).toFixed(2), "revenue"]}
             />
-            <Legend />
-
-            {shops.map((shop) => (
-              <Line
-                key={shop}
-                type="monotone"
-                dataKey={shop}
-                name={shop}
-                dot={false}
-                isAnimationActive={false}
-              />
-            ))}
+            <Line type="monotone" dataKey="revenue" dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
